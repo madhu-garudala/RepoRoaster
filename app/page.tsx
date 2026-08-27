@@ -345,7 +345,6 @@ export default function Home() {
               type="file"
               // @ts-expect-error React types don't include webkitdirectory
               webkitdirectory=""
-              directory=""
               multiple
               ref={fileInputRef}
               onChange={handleDirectorySelect}
@@ -493,7 +492,7 @@ export default function Home() {
           <article>
             <span>03</span><Flame size={27} />
             <h3>Apply personality</h3>
-            <p>Your mode controls the delivery. Whether it's a pedantic code review or a comedy set, it's guaranteed to hurt your feelings.</p>
+            <p>Your mode controls the delivery. Whether it&apos;s a pedantic code review or a comedy set, it&apos;s guaranteed to hurt your feelings.</p>
           </article>
         </div>
       </section>

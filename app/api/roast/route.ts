@@ -61,6 +61,7 @@ const runRoast = traced(
     mode: ModeId;
     signal: AbortSignal;
     onStatus: (message: string) => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     payload?: any;
   }) => {
     let owner: string;
@@ -122,6 +123,7 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   const contentLength = Number(request.headers.get("content-length") || 0);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const returnResponse = async (body: any, init?: ResponseInit) => {
     await flushTracing();
     return Response.json(body, init);
@@ -134,6 +136,7 @@ export async function POST(request: Request) {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let payload: { repoUrl?: unknown; mode?: unknown; localContext?: any };
   try {
     payload = (await request.json()) as typeof payload;

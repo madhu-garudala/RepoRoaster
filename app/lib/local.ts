@@ -90,7 +90,7 @@ async function walkDir(dir: string, baseDir: string, maxFiles = 10000): Promise<
           }
         }
       }
-    } catch (e) {
+    } catch {
       // ignore unreadable directories
     }
   }
