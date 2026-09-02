@@ -214,6 +214,7 @@ data "aws_iam_policy_document" "github_deploy" {
     sid = "EcrImages"
     actions = [
       "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
       "ecr:DescribeImages",
       "ecr:GetDownloadUrlForLayer",
