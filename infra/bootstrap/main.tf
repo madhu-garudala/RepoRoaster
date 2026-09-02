@@ -182,11 +182,21 @@ resource "aws_iam_role" "apprunner_instance" {
   assume_role_policy = data.aws_iam_policy_document.apprunner_instance_trust.json
 }
 
+data "aws_kms_alias" "secretsmanager" {
+  name = "alias/aws/secretsmanager"
+}
+
 data "aws_iam_policy_document" "apprunner_secrets" {
   statement {
     sid       = "ReadApplicationSecrets"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.openai_api_key.arn, aws_secretsmanager_secret.langsmith_api_key.arn]
+  }
+
+  statement {
+    sid       = "DecryptApplicationSecrets"
+    actions   = ["kms:Decrypt"]
+    resources = [data.aws_kms_alias.secretsmanager.target_key_arn]
   }
 }
 
