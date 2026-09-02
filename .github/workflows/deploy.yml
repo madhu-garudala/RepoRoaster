@@ -81,6 +81,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Smoke test container
+        env:
+          IMAGE_URI: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          container_id=$(docker run --detach --publish 127.0.0.1:3000:3000 "$IMAGE_URI")
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1' EXIT
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 2 --retry-all-errors \
+            http://127.0.0.1:3000/api/health
+
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}

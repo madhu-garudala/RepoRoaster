@@ -63,6 +63,7 @@ resource "aws_apprunner_service" "app" {
 
       image_configuration {
         port                          = "3000"
+        start_command                 = "node server.js"
         runtime_environment_variables = local.runtime_environment_variables
         runtime_environment_secrets = {
           OPENAI_API_KEY    = data.terraform_remote_state.bootstrap.outputs.openai_api_key_secret_arn
