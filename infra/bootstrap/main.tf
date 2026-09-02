@@ -13,6 +13,11 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
+resource "aws_iam_service_linked_role" "apprunner" {
+  aws_service_name = "apprunner.amazonaws.com"
+  description      = "Allows AWS App Runner to manage Repo Roaster service resources."
+}
+
 locals {
   name_prefix       = "repo-roaster"
   state_bucket_name = "${local.name_prefix}-tfstate-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
