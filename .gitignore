@@ -40,3 +40,10 @@ yarn-error.log*
 /work/
 *.tsbuildinfo
 .dev.vars
+
+# terraform working data and plans (the dependency lock files are committed)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

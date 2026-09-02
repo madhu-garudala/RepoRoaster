@@ -1,0 +1,118 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "137812392649"
+  ECR_REPOSITORY: repo-roaster
+  TERRAFORM_VERSION: 1.16.0
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - run: terraform fmt -check -recursive infra
+      - run: terraform -chdir=infra/app init -backend=false
+      - run: terraform -chdir=infra/app validate
+
+  deploy:
+    name: Build and deploy
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::137812392649:role/repo-roaster-github-deploy
+          role-session-name: repo-roaster-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Plan infrastructure
+        run: |
+          terraform -chdir=infra/app init -input=false
+          terraform -chdir=infra/app plan \
+            -input=false \
+            -lock-timeout=5m \
+            -out=deployment.tfplan \
+            -var="image_tag=${GITHUB_SHA}"
+
+      - name: Apply infrastructure
+        run: terraform -chdir=infra/app apply -input=false -auto-approve deployment.tfplan
+
+      - name: Verify health
+        id: deployment
+        run: |
+          service_url=$(terraform -chdir=infra/app output -raw service_url)
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 10 --retry-all-errors \
+            "${service_url}/api/health"
+          echo "service_url=${service_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Production deployed"
+            echo
+            echo "- URL: ${{ steps.deployment.outputs.service_url }}"
+            echo "- Image: \`${GITHUB_SHA}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

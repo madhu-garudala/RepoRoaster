@@ -14,8 +14,8 @@ The personality changes delivery, not evidence. Every finding must cite a sample
 
 ## Stack
 
-- React 19, TypeScript, vinext, Vite, and Tailwind CSS 4
-- Cloudflare Worker-compatible server routes
+- React 19, TypeScript, Next.js 16, and Tailwind CSS 4
+- Next.js server routes with a standalone production container
 - GitHub REST API for public repository metadata, trees, languages, and file blobs
 - OpenAI Responses API with `gpt-5.6-luna`, medium reasoning, and strict structured output
 - LangSmith tracing with bounded/redacted inputs and outputs
@@ -40,6 +40,16 @@ npm run lint
 npm run typecheck
 npm test
 ```
+
+## AWS deployment
+
+Production deployment is defined entirely in Terraform and runs through GitHub
+Actions using short-lived AWS credentials from GitHub OIDC. The first-cost-aware
+architecture uses ECR, App Runner, Secrets Manager, and a WAF rate limit—there is
+no cluster, load balancer, database, or NAT gateway to pay for.
+
+See [docs/AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md) for the architecture,
+bootstrap procedure, cost envelope, deployment flow, and operations runbook.
 
 ## Safety and privacy
 

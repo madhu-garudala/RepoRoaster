@@ -13,15 +13,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "langsmith": "^0.9.0",
     "lucide-react": "^1.33.0",
-    "next": "^16.3.3",
+    "next": "^16.3.4",
     "openai": "^7.5.0",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -36,11 +38,12 @@
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "16.4.0",
-    "react-server-dom-webpack": "19.2.6",
+    "react-server-dom-webpack": "^19.2.8",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3",
-    "vite": "8.0.13"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "type": "module"
 }

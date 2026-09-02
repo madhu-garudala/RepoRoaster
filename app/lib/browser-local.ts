@@ -21,6 +21,7 @@ function isTextCandidate(filePath: string, size: number) {
   const lower = filePath.toLowerCase();
   if (IGNORED_PATH_PARTS.some((part) => lower.includes(part))) return false;
   if (/\.(min\.(js|css)|map|lock|svg)$/i.test(lower)) return false;
+  if (/(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.ya?ml)$/i.test(lower)) return false;
   const name = lower.split("/").pop() || "";
   const extension = name.includes(".") ? name.split(".").pop() || "" : name;
   return (
