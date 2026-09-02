@@ -273,12 +273,6 @@ data "aws_iam_policy_document" "github_deploy" {
     sid       = "PassAppRunnerRoles"
     actions   = ["iam:PassRole"]
     resources = [aws_iam_role.apprunner_ecr_access.arn, aws_iam_role.apprunner_instance.arn]
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["apprunner.amazonaws.com"]
-    }
   }
 }
 
