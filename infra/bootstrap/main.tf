@@ -244,12 +244,14 @@ data "aws_iam_policy_document" "github_deploy" {
   statement {
     sid = "ManageAppRunner"
     actions = [
+      "apprunner:AssociateWebAcl",
       "apprunner:CreateAutoScalingConfiguration",
       "apprunner:CreateService",
       "apprunner:DeleteAutoScalingConfiguration",
       "apprunner:DeleteService",
       "apprunner:DescribeAutoScalingConfiguration",
       "apprunner:DescribeService",
+      "apprunner:DisassociateWebAcl",
       "apprunner:ListAutoScalingConfigurations",
       "apprunner:ListOperations",
       "apprunner:ListServices",
