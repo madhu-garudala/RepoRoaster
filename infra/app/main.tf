@@ -26,6 +26,7 @@ locals {
   runtime_environment_variables = merge(
     {
       APP_VERSION             = var.image_tag
+      HOSTNAME                = "0.0.0.0"
       LANGSMITH_PROJECT       = "RepoRoasterNew"
       LANGSMITH_TRACING       = "true"
       LANGCHAIN_TRACING_V2    = "true"
