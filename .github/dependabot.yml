@@ -9,6 +9,15 @@ updates:
         dependency-type: production
       development-dependencies:
         dependency-type: development
+    ignore:
+      # eslint-plugin-jsx-a11y peers on eslint <=9.
+      - dependency-name: eslint
+        versions: [">=10"]
+      - dependency-name: "@eslint/js"
+        versions: [">=10"]
+      # typescript-eslint peers on typescript <6.1.
+      - dependency-name: typescript
+        versions: [">=6"]
 
   - package-ecosystem: terraform
     directory: /infra/bootstrap
