@@ -109,7 +109,7 @@ a { color: inherit; text-decoration: none; }
 
 .results { padding: 95px 0; scroll-margin-top: 20px; }
 .result-heading { display: flex; justify-content: space-between; gap: 40px; align-items: flex-end; border-bottom: 1.5px solid var(--ink); padding-bottom: 35px; }
-.result-heading a { display: inline-flex; align-items: center; gap: 10px; font-size: clamp(38px, 6vw, 74px); line-height: 1; letter-spacing: -.055em; font-weight: 750; }
+.result-heading a, .result-heading .repo-name { display: inline-flex; align-items: center; gap: 10px; font-size: clamp(38px, 6vw, 74px); line-height: 1; letter-spacing: -.055em; font-weight: 750; }
 .result-heading a:hover { color: var(--accent); }
 .result-heading p:last-child { margin: 12px 0 0; color: var(--accent); font: 700 13px/1.4 var(--font-geist-mono); text-transform: uppercase; }
 .score-dial { flex: 0 0 auto; width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--score) * 1%), var(--soft-line) 0); }

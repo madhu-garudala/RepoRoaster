@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { processBrowserFiles } from "./lib/browser-local";
+import { isSafeRepositoryUrl } from "./lib/request";
 
 const MODES = [
   {
@@ -169,6 +170,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLElement | null>(null);
+  // Identifies what the current result was roasted from, so switching tone on the
+  // same target can rewrite the existing roast instead of re-analysing the repo.
+  const lastTargetRef = useRef<string | null>(null);
 
   async function handleDirectorySelect(event: React.ChangeEvent<HTMLInputElement>) {
     if (event.target.files && event.target.files.length > 0) {
@@ -204,18 +208,15 @@ export default function Home() {
 
       let payload: Record<string, unknown> = { repoUrl, mode };
       
-      // If we already have a result for this exact repo, we can reuse it to save tokens
-      const isSameRepo = result && (
-        result.repo.url === `file://${repoUrl.replace(" (Local)", "")}` || 
-        result.repo.url === `https://github.com/${repoUrl.replace("https://github.com/", "")}` ||
-        result.repo.url === `https://github.com/${repoUrl}` ||
-        (localFiles.length > 0 && result.repo.url === `file://${localFiles[0].webkitRelativePath.split('/')[0] || "local-repo"}`)
-      );
-      
-      if (isSameRepo) {
+      const target = localFiles.length > 0
+        ? `local:${localFiles[0].webkitRelativePath.split("/")[0] || "local-repo"}:${localFiles.length}`
+        : `github:${repoUrl.toLowerCase().replace(/^(https?:\/\/)?(www\.)?github\.com\//, "").replace(/(\.git)?\/?$/, "")}`;
+
+      // If we already have a result for this exact repo, reuse it to save tokens
+      if (result && lastTargetRef.current === target) {
         payload.previousRoast = result.roast;
       }
-      
+
       if (localFiles.length > 0) {
         const localContext = await processBrowserFiles(localFiles, (msg) => setStatus(msg));
         payload = { ...payload, repoUrl: "local", mode, localContext };
@@ -260,6 +261,7 @@ export default function Home() {
             setStatus(eventData.message);
           }
           if (eventData.type === "result" && eventData.result) {
+            lastTargetRef.current = target;
             setResult(eventData.result);
             setStatus("");
             requestAnimationFrame(() =>
@@ -417,9 +419,13 @@ export default function Home() {
           <div className="result-heading">
             <div>
               <p className="eyebrow"><span /> THE DAMAGE REPORT</p>
-              <a href={result.repo.url} target="_blank" rel="noreferrer">
-                {result.repo.name} <ExternalLink size={17} />
-              </a>
+              {isSafeRepositoryUrl(result.repo.url) ? (
+                <a href={result.repo.url} target="_blank" rel="noreferrer">
+                  {result.repo.name} <ExternalLink size={17} />
+                </a>
+              ) : (
+                <span className="repo-name">{result.repo.name}</span>
+              )}
               <p>{result.roast.verdict}</p>
             </div>
             <ScoreDial score={result.roast.score} />

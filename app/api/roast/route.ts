@@ -1,7 +1,8 @@
 import { fetchRepositoryContext, GitHubRepositoryError, parseGitHubRepo } from "../../lib/github";
 import { generateRoast, ROAST_MODEL } from "../../lib/roast";
 import { hashIdentifier, logEvent, traced, flushTracing } from "../../lib/observability";
-import { MODE_IDS, type ModeId, type RoastResult } from "../../lib/types";
+import { parseLocalContext, parsePreviousRoast, RoastRequestError } from "../../lib/request";
+import { MODE_IDS, type ModeId, type RepositoryContext, type Roast, type RoastResult } from "../../lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ function cacheSet(key: string, value: Omit<RoastResult, "meta">) {
 }
 
 function safeError(error: unknown) {
-  if (error instanceof GitHubRepositoryError) return error.message;
+  if (error instanceof GitHubRepositoryError || error instanceof RoastRequestError) return error.message;
   if (error instanceof Error && error.name === "AbortError") {
     return "The analysis timed out. Try a smaller repository or try again.";
   }
@@ -55,39 +56,36 @@ const runRoast = traced(
     mode,
     signal,
     onStatus,
-    payload,
+    localContext,
+    previousRoast,
   }: {
     repoUrl: string;
     mode: ModeId;
     signal: AbortSignal;
     onStatus: (message: string) => void;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payload?: any;
+    localContext?: RepositoryContext;
+    previousRoast?: Roast;
   }) => {
-    let owner: string;
-    let repo: string;
+    // Only fresh roasts of GitHub repositories are cached. Local uploads and tone
+    // rewrites are built from client-supplied data, so caching them under a
+    // repository key would let one visitor plant a roast that others receive.
+    let cacheKey: string | null = null;
+    let context: RepositoryContext;
 
-    if (payload?.localContext) {
-      owner = payload.localContext.owner;
-      repo = payload.localContext.repo;
+    if (localContext) {
+      context = localContext;
     } else {
-      const parsed = parseGitHubRepo(repoUrl);
-      owner = parsed.owner;
-      repo = parsed.repo;
-    }
-
-    const cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}:${ROAST_MODEL}:v1`;
-    const cached = cacheGet(cacheKey);
-    if (cached) return { ...cached, cached: true };
-
-    let context;
-    if (payload?.localContext) {
-      context = payload.localContext;
-    } else {
+      const { owner, repo } = parseGitHubRepo(repoUrl);
+      if (!previousRoast) {
+        cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}:${ROAST_MODEL}:v1`;
+        const cached = cacheGet(cacheKey);
+        if (cached) return { ...cached, cached: true };
+      }
       context = await fetchRepositoryContext(owner, repo, signal, onStatus);
     }
+
     onStatus("Luna is sharpening the punchlines…");
-    const { roast } = await generateRoast(context, mode, signal, payload?.previousRoast);
+    const { roast } = await generateRoast(context, mode, signal, previousRoast);
 
     const result = {
       repo: {
@@ -101,7 +99,7 @@ const runRoast = traced(
       },
       roast,
     };
-    cacheSet(cacheKey, result);
+    if (cacheKey) cacheSet(cacheKey, result);
     return { ...result, cached: false };
   },
   {
@@ -136,10 +134,18 @@ export async function POST(request: Request) {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let payload: { repoUrl?: unknown; mode?: unknown; localContext?: any };
+  let payload: { repoUrl?: unknown; mode?: unknown; localContext?: unknown; previousRoast?: unknown };
   try {
-    payload = (await request.json()) as typeof payload;
+    // Content-Length is optional (chunked uploads), so enforce the limit on the body itself.
+    const body = await request.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
+      return returnResponse(
+        { error: "Request body is too large." },
+        { status: 413, headers: { "X-Request-Id": requestId } },
+      );
+    }
+    payload = JSON.parse(body) as typeof payload;
+    if (!payload || typeof payload !== "object") throw new Error("Expected a JSON object.");
   } catch {
     return returnResponse(
       { error: "Send a repository URL and roast mode as JSON." },
@@ -159,14 +165,20 @@ export async function POST(request: Request) {
     );
   }
 
+  let localContext: RepositoryContext | undefined;
+  let previousRoast: Roast | undefined;
   try {
-    if (!payload.localContext) {
+    if (payload.localContext !== undefined) {
+      localContext = parseLocalContext(payload.localContext);
+    } else {
       parseGitHubRepo(repoUrl);
     }
+    previousRoast = parsePreviousRoast(payload.previousRoast);
   } catch (error) {
+    const status = error instanceof GitHubRepositoryError || error instanceof RoastRequestError ? error.status : 400;
     return returnResponse(
       { error: safeError(error) },
-      { status: error instanceof GitHubRepositoryError ? error.status : 400, headers: { "X-Request-Id": requestId } },
+      { status, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -183,7 +195,8 @@ export async function POST(request: Request) {
           mode,
           signal,
           onStatus: (message) => writeEvent(controller, { type: "status", message }),
-          payload,
+          localContext,
+          previousRoast,
         });
 
         const durationMs = Date.now() - startedAt;
