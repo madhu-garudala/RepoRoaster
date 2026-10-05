@@ -50,6 +50,21 @@ function safeError(error: unknown) {
   return "The roast failed before it reached the table. Try again in a moment.";
 }
 
+// Upstream details (HTTP status, provider error code, a bounded message) go to
+// server logs only, so production failures are diagnosable without exposing
+// them to the browser.
+function errorDiagnostics(error: unknown) {
+  if (!(error instanceof Error)) return {};
+  const upstream = error as Error & { status?: unknown; code?: unknown; cause?: unknown };
+  const cause = upstream.cause instanceof Error ? upstream.cause.message : undefined;
+  return {
+    error_message: error.message.slice(0, 300),
+    error_status: typeof upstream.status === "number" ? upstream.status : undefined,
+    error_code: typeof upstream.code === "string" ? upstream.code : undefined,
+    error_cause: cause?.slice(0, 200),
+  };
+}
+
 const runRoast = traced(
   async ({
     repoUrl,
@@ -231,6 +246,7 @@ export async function POST(request: Request) {
           mode,
           duration_ms: durationMs,
           error_name: error instanceof Error ? error.name : "UnknownError",
+          ...errorDiagnostics(error),
         });
       } finally {
         clearTimeout(timeout);
