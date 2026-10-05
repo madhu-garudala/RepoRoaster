@@ -6,7 +6,7 @@
     "ws": "8.21.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
