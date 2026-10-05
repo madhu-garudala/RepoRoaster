@@ -8,6 +8,7 @@ import {
   Code2,
   ExternalLink,
   Flame,
+  FolderOpen,
   GitFork,
   Moon,
   RotateCcw,
@@ -352,11 +353,25 @@ export default function Home() {
               onChange={handleDirectorySelect}
               style={{ display: 'none' }}
             />
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="paste-button" style={{ marginLeft: 5 }}>
-              LOCAL FOLDER
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="input-action folder-button"
+              disabled={loading}
+              aria-label="Select a local folder"
+              title="Select a local folder"
+            >
+              <FolderOpen size={15} aria-hidden="true" /> <span className="action-label">LOCAL FOLDER</span>
             </button>
-            <button type="button" onClick={pasteUrl} className="paste-button">
-              <Clipboard size={15} /> PASTE
+            <button
+              type="button"
+              onClick={pasteUrl}
+              className="input-action paste-button"
+              disabled={loading}
+              aria-label="Paste from clipboard"
+              title="Paste from clipboard"
+            >
+              <Clipboard size={15} aria-hidden="true" /> <span className="action-label">PASTE</span>
             </button>
           </div>
 
