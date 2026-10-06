@@ -18,7 +18,7 @@ const roast = {
   verdict: "Bold choices",
   score: 42,
   summary: "x".repeat(40),
-  hits: Array.from({ length: 4 }, () => ({
+  hits: Array.from({ length: 5 }, () => ({
     title: "Hit",
     body: "y".repeat(20),
     evidence: "zzz",
@@ -26,6 +26,7 @@ const roast = {
   })),
   redeemingQuality: "r".repeat(20),
   firstAid: ["a".repeat(8), "b".repeat(8), "c".repeat(8)],
+  micDrop: "And that's the show.",
 };
 
 describe("parseLocalContext", () => {

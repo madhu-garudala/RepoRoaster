@@ -4,22 +4,25 @@ export const MODE_IDS = ["pep-talk", "code-review", "napalm", "nsfw", "funny"] a
 
 export type ModeId = (typeof MODE_IDS)[number];
 
+export const ROAST_HIT_COUNT = 5;
+
 export const roastSchema = z.object({
-  verdict: z.string().min(5).max(140),
+  verdict: z.string().min(5).max(160),
   score: z.number().int().min(0).max(100),
-  summary: z.string().min(40).max(900),
+  summary: z.string().min(40).max(1_600),
   hits: z
     .array(
       z.object({
-        title: z.string().min(3).max(100),
-        body: z.string().min(20).max(700),
-        evidence: z.string().min(3).max(260),
+        title: z.string().min(3).max(120),
+        body: z.string().min(20).max(1_100),
+        evidence: z.string().min(3).max(300),
         severity: z.enum(["low", "medium", "high"]),
       }),
     )
-    .length(4),
-  redeemingQuality: z.string().min(20).max(500),
-  firstAid: z.array(z.string().min(8).max(240)).length(3),
+    .length(ROAST_HIT_COUNT),
+  redeemingQuality: z.string().min(20).max(700),
+  firstAid: z.array(z.string().min(8).max(300)).length(3),
+  micDrop: z.string().min(10).max(280),
 });
 
 export type Roast = z.infer<typeof roastSchema>;
@@ -65,7 +68,7 @@ export type RoastResult = {
   roast: Roast;
   meta: {
     requestId: string;
-    model: "gpt-5.6-luna";
+    model: string;
     cached: boolean;
     durationMs: number;
   };
