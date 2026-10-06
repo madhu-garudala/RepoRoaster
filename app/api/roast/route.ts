@@ -1,17 +1,22 @@
 import { fetchRepositoryContext, GitHubRepositoryError, parseGitHubRepo } from "../../lib/github";
-import { generateRoast, ROAST_MODEL } from "../../lib/roast";
+import { publicErrorMessage } from "../../lib/errors";
+import { checkRoastLimits } from "../../lib/limits";
+import { generateRoast, roastModel } from "../../lib/roast";
 import { hashIdentifier, logEvent, traced, flushTracing } from "../../lib/observability";
 import { parseLocalContext, parsePreviousRoast, RoastRequestError } from "../../lib/request";
+import { storeBackend, storeGet, storeSet } from "../../lib/store";
 import { MODE_IDS, type ModeId, type RepositoryContext, type Roast, type RoastResult } from "../../lib/types";
 
 export const dynamic = "force-dynamic";
+// Long-form roasts can take a while; keep the platform limit above the 85 s deadline.
+export const maxDuration = 90;
 
-const CACHE_TTL_MS = 60 * 60 * 1_000;
-const MAX_CACHE_ENTRIES = 50;
+const CACHE_TTL_SECONDS = 6 * 60 * 60;
+const ROAST_DEADLINE_MS = 85_000;
 const MAX_BODY_BYTES = 1048576;
+const PROMPT_VERSION = "v2";
 
-type CacheRecord = { createdAt: number; result: Omit<RoastResult, "meta"> };
-const responseCache = new Map<string, CacheRecord>();
+type CachedRoast = Omit<RoastResult, "meta">;
 
 function writeEvent(
   controller: ReadableStreamDefaultController<Uint8Array>,
@@ -20,34 +25,22 @@ function writeEvent(
   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`));
 }
 
-function cacheGet(key: string) {
-  const record = responseCache.get(key);
-  if (!record) return null;
-  if (Date.now() - record.createdAt > CACHE_TTL_MS) {
-    responseCache.delete(key);
+function cacheKeyFor(owner: string, repo: string, mode: ModeId) {
+  return `roast:${PROMPT_VERSION}:${roastModel()}:${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}`;
+}
+
+async function cacheGet(key: string): Promise<CachedRoast | null> {
+  const raw = await storeGet(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CachedRoast;
+  } catch {
     return null;
   }
-  responseCache.delete(key);
-  responseCache.set(key, record);
-  return record.result;
 }
 
-function cacheSet(key: string, value: Omit<RoastResult, "meta">) {
-  responseCache.set(key, { createdAt: Date.now(), result: value });
-  while (responseCache.size > MAX_CACHE_ENTRIES) {
-    const oldest = responseCache.keys().next().value as string | undefined;
-    if (!oldest) break;
-    responseCache.delete(oldest);
-  }
-}
-
-function safeError(error: unknown) {
-  if (error instanceof GitHubRepositoryError || error instanceof RoastRequestError) return error.message;
-  if (error instanceof Error && error.name === "AbortError") {
-    return "The analysis timed out. Try a smaller repository or try again.";
-  }
-  if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) return error.message;
-  return "The roast failed before it reached the table. Try again in a moment.";
+async function cacheSet(key: string, value: CachedRoast) {
+  await storeSet(key, JSON.stringify(value), CACHE_TTL_SECONDS);
 }
 
 // Upstream details (HTTP status, provider error code, a bounded message) go to
@@ -73,6 +66,7 @@ const runRoast = traced(
     onStatus,
     localContext,
     previousRoast,
+    cacheKey,
   }: {
     repoUrl: string;
     mode: ModeId;
@@ -80,26 +74,17 @@ const runRoast = traced(
     onStatus: (message: string) => void;
     localContext?: RepositoryContext;
     previousRoast?: Roast;
+    cacheKey: string | null;
   }) => {
-    // Only fresh roasts of GitHub repositories are cached. Local uploads and tone
-    // rewrites are built from client-supplied data, so caching them under a
-    // repository key would let one visitor plant a roast that others receive.
-    let cacheKey: string | null = null;
     let context: RepositoryContext;
-
     if (localContext) {
       context = localContext;
     } else {
       const { owner, repo } = parseGitHubRepo(repoUrl);
-      if (!previousRoast) {
-        cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}:${ROAST_MODEL}:v1`;
-        const cached = cacheGet(cacheKey);
-        if (cached) return { ...cached, cached: true };
-      }
       context = await fetchRepositoryContext(owner, repo, signal, onStatus);
     }
 
-    onStatus("Luna is sharpening the punchlines…");
+    onStatus("Luna is writing the set. Long-form roasts take a moment…");
     const { roast } = await generateRoast(context, mode, signal, previousRoast);
 
     const result = {
@@ -114,7 +99,7 @@ const runRoast = traced(
       },
       roast,
     };
-    if (cacheKey) cacheSet(cacheKey, result);
+    if (cacheKey) await cacheSet(cacheKey, result);
     return { ...result, cached: false };
   },
   {
@@ -122,7 +107,7 @@ const runRoast = traced(
     runType: "chain",
     processInputs: (inputs) => {
       const value = inputs as { repoUrl?: string; mode?: ModeId };
-      return { repository_url: value.repoUrl, mode: value.mode, prompt_version: "v1" };
+      return { repository_url: value.repoUrl, mode: value.mode, prompt_version: PROMPT_VERSION };
     },
     processOutputs: (outputs) => {
       const value = outputs as { repo?: { name?: string }; roast?: { score?: number }; cached?: boolean };
@@ -192,27 +177,60 @@ export async function POST(request: Request) {
   } catch (error) {
     const status = error instanceof GitHubRepositoryError || error instanceof RoastRequestError ? error.status : 400;
     return returnResponse(
-      { error: safeError(error) },
+      { error: publicErrorMessage(error) },
       { status, headers: { "X-Request-Id": requestId } },
     );
   }
 
+  // Only fresh roasts of GitHub repositories are cached. Local uploads and tone
+  // rewrites are built from client-supplied data, so caching them under a
+  // repository key would let one visitor plant a roast that others receive.
+  let cacheKey: string | null = null;
+  let cached: CachedRoast | null = null;
+  if (!localContext && !previousRoast) {
+    const { owner, repo } = parseGitHubRepo(repoUrl);
+    cacheKey = cacheKeyFor(owner, repo, mode);
+    cached = await cacheGet(cacheKey);
+  }
+
+  // Cache hits are free; every model call counts against the visitor and daily limits.
+  if (!cached) {
+    const decision = await checkRoastLimits(request.headers);
+    if (!decision.allowed) {
+      logEvent("repo_roast_limited", {
+        request_id: requestId,
+        reason: decision.reason,
+        store: storeBackend(),
+      });
+      return returnResponse(
+        { error: decision.message },
+        {
+          status: 429,
+          headers: { "X-Request-Id": requestId, "Retry-After": String(decision.retryAfterSeconds) },
+        },
+      );
+    }
+  }
+
   const timeoutController = new AbortController();
-  const timeout = setTimeout(() => timeoutController.abort(), 52_000);
+  const timeout = setTimeout(() => timeoutController.abort(), ROAST_DEADLINE_MS);
   const signal = AbortSignal.any([request.signal, timeoutController.signal]);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         writeEvent(controller, { type: "status", message: "Validating the target…" });
-        const result = await runRoast({
-          repoUrl,
-          mode,
-          signal,
-          onStatus: (message) => writeEvent(controller, { type: "status", message }),
-          localContext,
-          previousRoast,
-        });
+        const result = cached
+          ? { ...cached, cached: true }
+          : await runRoast({
+            repoUrl,
+            mode,
+            signal,
+            onStatus: (message) => writeEvent(controller, { type: "status", message }),
+            localContext,
+            previousRoast,
+            cacheKey,
+          });
 
         const durationMs = Date.now() - startedAt;
         const response: RoastResult = {
@@ -220,7 +238,7 @@ export async function POST(request: Request) {
           roast: result.roast,
           meta: {
             requestId,
-            model: ROAST_MODEL,
+            model: roastModel(),
             cached: result.cached,
             durationMs,
           },
@@ -231,7 +249,7 @@ export async function POST(request: Request) {
         logEvent("repo_roast_complete", {
           request_id: requestId,
           repository_hash: repositoryHash,
-          model: ROAST_MODEL,
+          model: roastModel(),
           mode,
           cache_hit: result.cached,
           duration_ms: durationMs,
@@ -239,10 +257,10 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         const durationMs = Date.now() - startedAt;
-        writeEvent(controller, { type: "error", message: safeError(error), requestId });
+        writeEvent(controller, { type: "error", message: publicErrorMessage(error), requestId });
         logEvent("repo_roast_error", {
           request_id: requestId,
-          model: ROAST_MODEL,
+          model: roastModel(),
           mode,
           duration_ms: durationMs,
           error_name: error instanceof Error ? error.name : "UnknownError",
