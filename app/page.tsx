@@ -6,12 +6,16 @@ import {
   ChevronRight,
   Clipboard,
   Code2,
+  Copy,
+  Download,
   ExternalLink,
   Flame,
   FolderOpen,
   GitFork,
+  Mic,
   Moon,
   RotateCcw,
+  Share2,
   ShieldCheck,
   Sparkles,
   Square,
@@ -22,41 +26,42 @@ import {
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { processBrowserFiles } from "./lib/browser-local";
 import { isSafeRepositoryUrl } from "./lib/request";
+import { renderRoastCard, roastAsText, roastShareUrl } from "./lib/share";
 
 const MODES = [
   {
     id: "pep-talk",
     name: "Pep Talk",
-    eyebrow: "Gentle",
-    description: "Helpful feedback with the emotional damage turned off.",
+    eyebrow: "Patronizing",
+    description: "Gold stars for the bare minimum, from a kindergarten teacher who is so proud of you.",
     glyph: "☺",
   },
   {
     id: "code-review",
     name: "Code Review",
-    eyebrow: "Direct",
-    description: "Candid, specific, and still safe to paste into a PR.",
+    eyebrow: "Insufferable",
+    description: "A smug 10x engineer's PR review. Nitpicks only. LGTM… not.",
     glyph: "⌁",
   },
   {
     id: "napalm",
     name: "Napalm",
     eyebrow: "Brutal",
-    description: "No cushioning. Your abstractions are on their own.",
+    description: "Roast-battle burns with zero mercy. Your abstractions are on their own.",
     glyph: "✦",
   },
   {
     id: "nsfw",
     name: "NSFW",
-    eyebrow: "Unhinged",
-    description: "Maximum brutality, explicit language, zero workplace decorum.",
+    eyebrow: "Uncensored",
+    description: "Filthy, explicit, swear-every-sentence brutality. Not safe for work.",
     glyph: "!#",
   },
   {
     id: "funny",
     name: "Funny",
-    eyebrow: "Comedy",
-    description: "A real code review disguised as a five-minute set.",
+    eyebrow: "Stand-up",
+    description: "A full comedy set about your repo: bits, act-outs and callbacks.",
     glyph: "☻",
   },
 ] as const;
@@ -85,6 +90,7 @@ type RoastResult = {
     }>;
     redeemingQuality: string;
     firstAid: string[];
+    micDrop: string;
   };
   meta: {
     requestId: string;
@@ -97,7 +103,8 @@ type RoastResult = {
 const EXAMPLES = [
   "https://github.com/expressjs/express",
   "https://github.com/pallets/flask",
-  "https://github.com/fastify/fastify",
+  "https://github.com/axios/axios",
+  "https://github.com/lodash/lodash",
 ];
 
 function formatNumber(value: number) {
@@ -164,7 +171,7 @@ export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<ModeId>("code-review");
+  const [mode, setMode] = useState<ModeId>("funny");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<RoastResult | null>(null);
@@ -174,6 +181,7 @@ export default function Home() {
   // Identifies what the current result was roasted from, so switching tone on the
   // same target can rewrite the existing roast instead of re-analysing the repo.
   const lastTargetRef = useRef<string | null>(null);
+  const [shareNote, setShareNote] = useState("");
 
   async function handleDirectorySelect(event: React.ChangeEvent<HTMLInputElement>) {
     if (event.target.files && event.target.files.length > 0) {
@@ -192,9 +200,22 @@ export default function Home() {
     }
   }
 
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault();
+    void roast(repoUrl, localFiles);
+  }
+
+  function roastExample(url: string) {
+    if (loading) return;
+    setRepoUrl(url);
+    setLocalFiles([]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    void roast(url, []);
+  }
+
+  async function roast(repoUrl: string, localFiles: File[]) {
     setError("");
+    setShareNote("");
     setResult(null);
     setStatus("Checking the address…");
     setLoading(true);
@@ -282,6 +303,35 @@ export default function Home() {
       setLoading(false);
       setStatus("");
       controllerRef.current = null;
+    }
+  }
+
+  function siteUrl() {
+    return window.location.origin;
+  }
+
+  async function copyRoast() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(roastAsText(result, siteUrl()));
+      setShareNote("Roast copied to your clipboard.");
+    } catch {
+      setShareNote("Clipboard access was blocked by the browser.");
+    }
+  }
+
+  async function downloadCard() {
+    if (!result) return;
+    try {
+      const blob = await renderRoastCard(result, window.location.host);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `repo-roast-${result.repo.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
+      setShareNote("Roast card downloaded.");
+    } catch {
+      setShareNote("Couldn't draw the card in this browser.");
     }
   }
 
@@ -375,6 +425,15 @@ export default function Home() {
             </button>
           </div>
 
+          <div className="try-row">
+            <span>TRY ONE:</span>
+            {EXAMPLES.slice(0, 3).map((example) => (
+              <button type="button" key={example} onClick={() => roastExample(example)} disabled={loading}>
+                {example.replace("https://github.com/", "")}
+              </button>
+            ))}
+          </div>
+
           <fieldset className="mode-fieldset" disabled={loading}>
             <legend>CHOOSE YOUR DAMAGE</legend>
             <div className="mode-grid">
@@ -422,7 +481,7 @@ export default function Home() {
         <div className="ticker-track shell">
           <span className="ticker-label">NEED A TEST SUBJECT?</span>
           {EXAMPLES.map((example) => (
-            <button key={example} onClick={() => { setRepoUrl(example); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+            <button key={example} onClick={() => roastExample(example)} disabled={loading}>
               {example.replace("https://github.com/", "")} <ChevronRight size={14} />
             </button>
           ))}
@@ -482,6 +541,27 @@ export default function Home() {
                 {result.roast.firstAid.map((item) => <li key={item}>{item}</li>)}
               </ol>
             </article>
+          </div>
+
+          <div className="mic-drop">
+            <Mic size={22} aria-hidden="true" />
+            <p>{result.roast.micDrop}</p>
+          </div>
+
+          <div className="share-bar">
+            <span className="mini-label">SPREAD THE DAMAGE</span>
+            <div>
+              <a className="share-button" href={roastShareUrl(result, typeof window === "undefined" ? "" : siteUrl())} target="_blank" rel="noreferrer">
+                <Share2 size={15} aria-hidden="true" /> SHARE ON X
+              </a>
+              <button className="share-button" type="button" onClick={copyRoast}>
+                <Copy size={15} aria-hidden="true" /> COPY ROAST
+              </button>
+              <button className="share-button" type="button" onClick={downloadCard}>
+                <Download size={15} aria-hidden="true" /> DOWNLOAD CARD
+              </button>
+            </div>
+            <p className="share-note" aria-live="polite">{shareNote}</p>
           </div>
 
           <div className="result-footer">
