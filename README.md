@@ -2,7 +2,7 @@
 
 **Live demo: [repo-roaster-eta.vercel.app](https://repo-roaster-eta.vercel.app/)**
 
-Paste a public GitHub repository, or pick a folder on your machine, choose a personality, and get a long-form roast of the codebase. Repo Roast reads repository metadata, maps the project tree, samples a bounded set of high-signal files, and asks GPT-5.6 Luna for a structured roast. Each roast has a vibes score from 0 to 100, a cold-open monologue, five escalating "hits" that quote the code, one backhanded compliment, three pieces of sarcastic first aid and a mic-drop closer that calls back to the opening.
+Paste a public GitHub repository, or pick a folder on your machine, choose a personality, and get a long-form roast of the codebase. Repo Roast reads repository metadata, maps the project tree, samples a bounded set of high-signal files, and asks an OpenAI model (`gpt-5.6-luna` by default, configurable with `ROAST_MODEL`) for a structured roast. Each roast has a vibes score from 0 to 100, a cold-open monologue, five escalating "hits" that quote the code, one backhanded compliment, three pieces of sarcastic first aid and a mic-drop closer that calls back to the opening.
 
 It is entertainment, not a code review: the jokes are written from the files it actually read, but the advice is intentionally useless.
 

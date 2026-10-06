@@ -68,7 +68,7 @@ FILE EVIDENCE
 ${files}`;
 }
 
-const generateWithLuna = traced(
+const generateWithModel = traced(
   async ({ context, previousRoast, mode, signal }: { context: RepositoryContext; previousRoast?: Roast; mode: ModeId; signal: AbortSignal }) => {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not configured on the server.");
@@ -108,7 +108,7 @@ const generateWithLuna = traced(
     );
 
     if (!response.output_parsed) {
-      throw new Error("Luna returned an incomplete structured review.");
+      throw new Error("The model returned an incomplete roast.");
     }
 
     return {
@@ -118,7 +118,7 @@ const generateWithLuna = traced(
     };
   },
   {
-    name: "Repo Roast · Luna Analysis",
+    name: "Repo Roast · Model Analysis",
     runType: "llm",
     processInputs: (inputs) => {
       const value = inputs as { context?: RepositoryContext; previousRoast?: Roast; mode?: ModeId };
@@ -146,5 +146,5 @@ const generateWithLuna = traced(
 );
 
 export async function generateRoast(context: RepositoryContext, mode: ModeId, signal: AbortSignal, previousRoast?: Roast) {
-  return generateWithLuna({ context, previousRoast, mode, signal });
+  return generateWithModel({ context, previousRoast, mode, signal });
 }

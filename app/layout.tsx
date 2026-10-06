@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const origin = configuredOrigin || (host ? `${protocol}://${host}` : "http://localhost:3000");
   const title = "Repo Roast — AI code review with teeth";
   const description =
-    "Drop a public GitHub repository and get an evidence-backed roast powered by GPT-5.6 Luna.";
+    "Drop a public GitHub repository and get an evidence-backed comedy roast of your code.";
   const socialImage = `${origin}/og.png`;
 
   return {

@@ -84,7 +84,7 @@ const runRoast = traced(
       context = await fetchRepositoryContext(owner, repo, signal, onStatus);
     }
 
-    onStatus("Luna is writing the set. Long-form roasts take a moment…");
+    onStatus("Writing the set. Long-form roasts take a moment…");
     const { roast } = await generateRoast(context, mode, signal, previousRoast);
 
     const result = {

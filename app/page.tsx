@@ -26,7 +26,7 @@ import {
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { processBrowserFiles } from "./lib/browser-local";
 import { isSafeRepositoryUrl } from "./lib/request";
-import { renderRoastCard, roastAsText, roastShareUrl } from "./lib/share";
+import { renderRoastCard, roastAsText, roastShareUrl, saveRoastCard } from "./lib/share";
 
 const MODES = [
   {
@@ -324,12 +324,10 @@ export default function Home() {
     if (!result) return;
     try {
       const blob = await renderRoastCard(result, window.location.host);
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `repo-roast-${result.repo.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
-      setShareNote("Roast card downloaded.");
+      const fileName = `repo-roast-${result.repo.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`;
+      const outcome = await saveRoastCard(blob, fileName, `${result.repo.name} got roasted`);
+      if (outcome === "downloaded") setShareNote("Roast card downloaded.");
+      if (outcome === "shared") setShareNote("Roast card shared.");
     } catch {
       setShareNote("Couldn't draw the card in this browser.");
     }
@@ -349,9 +347,16 @@ export default function Home() {
           <span>REPO ROAST</span>
         </a>
         <div className="nav-actions">
-          <span className="luna-pill"><Sparkles size={13} /> GPT-5.6 LUNA</span>
+          <button
+            className="nav-pill"
+            type="button"
+            onClick={() => roastExample(EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)])}
+            disabled={loading}
+          >
+            <Sparkles size={13} aria-hidden="true" /> SURPRISE ME
+          </button>
           <a className="nav-link" href="#how-it-works">HOW IT WORKS</a>
-          <a className="icon-button" href="https://github.com" target="_blank" rel="noreferrer" aria-label="Open GitHub">
+          <a className="icon-button" href="https://github.com/madhu-garudala/RepoRoaster" target="_blank" rel="noreferrer" aria-label="Repo Roast on GitHub" title="Source on GitHub">
             <GitFork size={18} />
           </a>
           <ThemeButton />
@@ -363,7 +368,7 @@ export default function Home() {
           <p className="eyebrow"><span /> AI REPO COMEDY ROAST</p>
           <h1>Your repo has been <em>talking</em> behind your back.</h1>
           <p className="lede">
-            Drop a public GitHub repository. Luna reads the evidence, finds the most questionable choices,
+            Drop a public GitHub repository. The roaster reads the evidence, finds the most questionable choices,
             and delivers the devastatingly funny code roast you deserve. Strictly for entertainment!
           </p>
           <div className="trust-row">
@@ -588,7 +593,7 @@ export default function Home() {
           <article>
             <span>02</span><Terminal size={27} />
             <h3>Find the comedy</h3>
-            <p>Luna ignores real bugs and instead mocks your over-engineered abstractions, naming conventions, and terrible styling choices.</p>
+            <p>The roaster ignores real bugs and instead mocks your over-engineered abstractions, naming conventions, and terrible styling choices.</p>
           </article>
           <article>
             <span>03</span><Flame size={27} />
@@ -602,7 +607,7 @@ export default function Home() {
         <div className="shell">
           <div className="brand"><span className="brand-mark"><Flame size={18} /></span><span>REPO ROAST</span></div>
           <p>Built for brave developers and suspicious pull requests.</p>
-          <span>GPT-5.6 LUNA · PUBLIC REPOS ONLY</span>
+          <span>PUBLIC REPOS ONLY · STRICTLY FOR ENTERTAINMENT</span>
         </div>
       </footer>
     </main>
