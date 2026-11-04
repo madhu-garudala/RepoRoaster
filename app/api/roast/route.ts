@@ -102,7 +102,7 @@ const runRoast = traced(
       context = await fetchRepositoryContext(owner, repo, signal, onStatus);
     }
 
-    onStatus("Luna is sharpening the punchlines…");
+    onStatus("Haiku is sharpening the punchlines…");
     const { roast } = await generateRoast(context, mode, signal, previousRoast, llm);
 
     const result = {
