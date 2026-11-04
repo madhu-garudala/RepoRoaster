@@ -20,7 +20,7 @@ GitHub main branch
   -> Terraform plan and apply using GitHub OIDC
   -> AWS WAF rate limit
   -> AWS App Runner (1-3 small instances)
-  -> OpenAI, GitHub API, and optional LangSmith
+  -> Anthropic or OpenAI, GitHub API, and optional LangSmith
 
 Terraform state -> encrypted/versioned S3 bucket with native lock files
 Runtime secrets -> AWS Secrets Manager -> App Runner instance role
