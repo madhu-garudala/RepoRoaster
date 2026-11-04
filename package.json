@@ -18,6 +18,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "langsmith": "^0.10.2",
     "lucide-react": "^1.41.0",
     "next": "^16.3.8",

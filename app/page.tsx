@@ -299,7 +299,7 @@ export default function Home() {
           <span>REPO ROAST</span>
         </a>
         <div className="nav-actions">
-          <span className="luna-pill"><Sparkles size={13} /> GPT-5.6 LUNA</span>
+          <span className="luna-pill"><Sparkles size={13} /> CLAUDE HAIKU</span>
           <a className="nav-link" href="#how-it-works">HOW IT WORKS</a>
           <a className="icon-button" href="https://github.com" target="_blank" rel="noreferrer" aria-label="Open GitHub">
             <GitFork size={18} />
@@ -313,7 +313,7 @@ export default function Home() {
           <p className="eyebrow"><span /> AI REPO COMEDY ROAST</p>
           <h1>Your repo has been <em>talking</em> behind your back.</h1>
           <p className="lede">
-            Drop a public GitHub repository. Luna reads the evidence, finds the most questionable choices,
+            Drop a public GitHub repository. Haiku reads the evidence, finds the most questionable choices,
             and delivers the devastatingly funny code roast you deserve. Strictly for entertainment!
           </p>
           <div className="trust-row">
@@ -508,7 +508,7 @@ export default function Home() {
           <article>
             <span>02</span><Terminal size={27} />
             <h3>Find the comedy</h3>
-            <p>Luna ignores real bugs and instead mocks your over-engineered abstractions, naming conventions, and terrible styling choices.</p>
+            <p>Haiku ignores real bugs and instead mocks your over-engineered abstractions, naming conventions, and terrible styling choices.</p>
           </article>
           <article>
             <span>03</span><Flame size={27} />
@@ -522,7 +522,7 @@ export default function Home() {
         <div className="shell">
           <div className="brand"><span className="brand-mark"><Flame size={18} /></span><span>REPO ROAST</span></div>
           <p>Built for brave developers and suspicious pull requests.</p>
-          <span>GPT-5.6 LUNA · PUBLIC REPOS ONLY</span>
+          <span>CLAUDE HAIKU · PUBLIC REPOS ONLY</span>
         </div>
       </footer>
     </main>

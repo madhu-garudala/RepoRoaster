@@ -65,7 +65,7 @@ export type RoastResult = {
   roast: Roast;
   meta: {
     requestId: string;
-    model: "gpt-5.6-luna";
+    model: string;
     cached: boolean;
     durationMs: number;
   };

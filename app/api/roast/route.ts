@@ -1,5 +1,5 @@
 import { fetchRepositoryContext, GitHubRepositoryError, parseGitHubRepo } from "../../lib/github";
-import { generateRoast, ROAST_MODEL } from "../../lib/roast";
+import { generateRoast, resolveRoastProvider, type RoastProviderConfig } from "../../lib/roast";
 import { hashIdentifier, logEvent, traced, flushTracing } from "../../lib/observability";
 import { parseLocalContext, parsePreviousRoast, RoastRequestError } from "../../lib/request";
 import { MODE_IDS, type ModeId, type RepositoryContext, type Roast, type RoastResult } from "../../lib/types";
@@ -46,7 +46,8 @@ function safeError(error: unknown) {
   if (error instanceof Error && error.name === "AbortError") {
     return "The analysis timed out. Try a smaller repository or try again.";
   }
-  if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) return error.message;
+  // Server misconfiguration messages name the variable, never its value.
+  if (error instanceof Error && /_API_KEY|LLM_PROVIDER/.test(error.message)) return error.message;
   return "The roast failed before it reached the table. Try again in a moment.";
 }
 
@@ -73,6 +74,7 @@ const runRoast = traced(
     onStatus,
     localContext,
     previousRoast,
+    llm,
   }: {
     repoUrl: string;
     mode: ModeId;
@@ -80,6 +82,7 @@ const runRoast = traced(
     onStatus: (message: string) => void;
     localContext?: RepositoryContext;
     previousRoast?: Roast;
+    llm: RoastProviderConfig;
   }) => {
     // Only fresh roasts of GitHub repositories are cached. Local uploads and tone
     // rewrites are built from client-supplied data, so caching them under a
@@ -92,15 +95,15 @@ const runRoast = traced(
     } else {
       const { owner, repo } = parseGitHubRepo(repoUrl);
       if (!previousRoast) {
-        cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}:${ROAST_MODEL}:v1`;
+        cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}:${mode}:${llm.model}:v1`;
         const cached = cacheGet(cacheKey);
         if (cached) return { ...cached, cached: true };
       }
       context = await fetchRepositoryContext(owner, repo, signal, onStatus);
     }
 
-    onStatus("Luna is sharpening the punchlines…");
-    const { roast } = await generateRoast(context, mode, signal, previousRoast);
+    onStatus("Haiku is sharpening the punchlines…");
+    const { roast } = await generateRoast(context, mode, signal, previousRoast, llm);
 
     const result = {
       repo: {
@@ -121,8 +124,14 @@ const runRoast = traced(
     name: "Repo Roast Request",
     runType: "chain",
     processInputs: (inputs) => {
-      const value = inputs as { repoUrl?: string; mode?: ModeId };
-      return { repository_url: value.repoUrl, mode: value.mode, prompt_version: "v1" };
+      const value = inputs as { repoUrl?: string; mode?: ModeId; llm?: RoastProviderConfig };
+      return {
+        repository_url: value.repoUrl,
+        mode: value.mode,
+        provider: value.llm?.provider,
+        model: value.llm?.model,
+        prompt_version: "v1",
+      };
     },
     processOutputs: (outputs) => {
       const value = outputs as { repo?: { name?: string }; roast?: { score?: number }; cached?: boolean };
@@ -197,6 +206,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Resolved per request so a deployment can switch providers with an env
+  // change alone; a bad LLM_PROVIDER value is a server error, not a client one.
+  let llm: RoastProviderConfig;
+  try {
+    llm = resolveRoastProvider();
+  } catch (error) {
+    return returnResponse(
+      { error: safeError(error) },
+      { status: 500, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
   const timeoutController = new AbortController();
   const timeout = setTimeout(() => timeoutController.abort(), 52_000);
   const signal = AbortSignal.any([request.signal, timeoutController.signal]);
@@ -212,6 +233,7 @@ export async function POST(request: Request) {
           onStatus: (message) => writeEvent(controller, { type: "status", message }),
           localContext,
           previousRoast,
+          llm,
         });
 
         const durationMs = Date.now() - startedAt;
@@ -220,7 +242,7 @@ export async function POST(request: Request) {
           roast: result.roast,
           meta: {
             requestId,
-            model: ROAST_MODEL,
+            model: llm.model,
             cached: result.cached,
             durationMs,
           },
@@ -231,7 +253,8 @@ export async function POST(request: Request) {
         logEvent("repo_roast_complete", {
           request_id: requestId,
           repository_hash: repositoryHash,
-          model: ROAST_MODEL,
+          provider: llm.provider,
+          model: llm.model,
           mode,
           cache_hit: result.cached,
           duration_ms: durationMs,
@@ -242,7 +265,8 @@ export async function POST(request: Request) {
         writeEvent(controller, { type: "error", message: safeError(error), requestId });
         logEvent("repo_roast_error", {
           request_id: requestId,
-          model: ROAST_MODEL,
+          provider: llm.provider,
+          model: llm.model,
           mode,
           duration_ms: durationMs,
           error_name: error instanceof Error ? error.name : "UnknownError",
